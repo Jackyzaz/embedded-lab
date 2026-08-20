@@ -5,7 +5,7 @@
 #include <TimeLib.h>
 #include <DS1307RTC.h>
 
-#define I2CADDR 0x20
+#define I2CADDR 0x38
 
 const byte ROWS = 4;
 const byte COLS = 4;
@@ -84,37 +84,40 @@ void print2digitsLCD(int number) {
 
 void setup()
 {
-  bool parse = false;
-  bool config = false;
-  // get the date and time the compiler was run
-  if (getDate(__DATE__) && getTime(__TIME__)) {
-    parse = true;
-    // and configure the RTC with this info
-    if (RTC.write(tm)) {
-      config = true;
-    }
-  }
+//  bool parse = false;
+//  bool config = false;
+//  // get the date and time the compiler was run
+//  if (getDate(__DATE__) && getTime(__TIME__)) {
+//    parse = true;
+//    // and configure the RTC with this info
+//    if (RTC.write(tm)) {
+//      config = true;
+//    }
+//  }
   Serial.begin(38400);
   while (!Serial) ; // wait for Arduino Serial Monitor
   delay(200);
-  if (parse && config) {
-    Serial.print("DS1307 configured Time=");
-    Serial.print(__TIME__);
-    Serial.print(", Date=");
-    Serial.println(__DATE__);
-  } else if (parse) {
-    Serial.println("DS1307 Communication Error :-{");
-    Serial.println("Please check your circuitry");
-  } else {
-    Serial.print("Could not parse info from the compiler, Time=\"");
-    Serial.print(__TIME__);
-    Serial.print("\", Date=\"");
-    Serial.print(__DATE__);
-    Serial.println("\"");
-  }
+//  if (parse && config) {
+//    Serial.print("DS1307 configured Time=");
+//    Serial.print(__TIME__);
+//    Serial.print(", Date=");
+//    Serial.println(__DATE__);
+//  } else if (parse) {
+//    Serial.println("DS1307 Communication Error :-{");
+//    Serial.println("Please check your circuitry");
+//  } else {
+//    Serial.print("Could not parse info from the compiler, Time=\"");
+//    Serial.print(__TIME__);
+//    Serial.print("\", Date=\"");
+//    Serial.print(__DATE__);
+//    Serial.println("\"");
+//  }
   lcd.init();
   lcd.backlight(); // เปิด backlight
   lcd.home();
+
+  Wire.begin();
+  keypad.begin();
 
   refresh_display();
 }
@@ -171,7 +174,8 @@ void loop()
   else if (mode == 1) {
     if (key != NO_KEY) {
       if (key == 'B') {
-        select_time = !select_time;
+        refresh_display();
+        select_time = !select_time; // 0 - minute, 1 - hour
       }
       if (key == 'C') {
         if (select_time) { // minute
@@ -205,7 +209,7 @@ void loop()
       }
     }
 
-    if (millis() - last_time > 500) {
+    if (millis() - last_time > 400) {
       last_time = millis();
       if (select_time) { // minute
         lcd.setCursor(10, 1);
@@ -222,16 +226,17 @@ void loop()
   else if (mode == 2) {
     if (key != NO_KEY) {
       if (key == 'A') {
+        refresh_display();
         select_date = (select_date + 1) % 3;
       }
-      if (key == 'C') {
-        if (select_date == 0) {
+      if (key == 'C') { 
+        if (select_date == 0) { // day
           dayDisplay++;
           if (dayDisplay > 31) dayDisplay = 1;
-        } else if (select_date == 1) {
+        } else if (select_date == 1) { // month
           monthDisplay++;
           if (monthDisplay > 12) monthDisplay = 1;
-        } else if (select_date == 2) {
+        } else if (select_date == 2) { // year
           yearDisplay++;
         }
         refresh_display();
@@ -261,7 +266,7 @@ void loop()
       }
     }
 
-    if (millis() - last_time > 500) {
+    if (millis() - last_time > 400) {
       last_time = millis();
       if (select_date == 0) { // Day
         lcd.setCursor(6, 0);
@@ -295,6 +300,6 @@ void refresh_display() {
   print2digitsLCD(hourDisplay);
   lcd.print(":");
   print2digitsLCD(minuteDisplay);
-  lcd.print(".");
+  lcd.print(":");
   print2digitsLCD(secondDisplay);
 }

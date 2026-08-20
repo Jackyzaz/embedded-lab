@@ -3,7 +3,7 @@
 #include <Keypad.h>
 #include <Wire.h>
 
-#define I2CADDR 0x20
+#define I2CADDR 0x38
 
 const byte ROWS = 4;
 const byte COLS = 4;

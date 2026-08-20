@@ -5,7 +5,7 @@
 #include <TimeLib.h>
 #include <DS1307RTC.h>
 
-#define I2CADDR 0x20
+#define I2CADDR 0x38
 
 const byte ROWS = 4;
 const byte COLS = 4;
@@ -72,34 +72,34 @@ void print2digits(int number) {
 
 void setup()
 {
-  bool parsed = false;
-  bool configured = false;
-  // get the date and time the compiler was run
-  if (getDate(__DATE__) && getTime(__TIME__)) {
-    parsed = true;
-    // and configure the RTC with this info
-    if (RTC.write(tm)) {
-      configured = true;
-    }
-  }
+//  bool parsed = false;
+//  bool configured = false;
+//  // get the date and time the compiler was run
+//  if (getDate(__DATE__) && getTime(__TIME__)) {
+//    parsed = true;
+//    // and configure the RTC with this info
+//    if (RTC.write(tm)) {
+//      configured = true;
+//    }
+//  }
   Serial.begin(38400);
   while (!Serial) ; // wait for Arduino Serial Monitor
   delay(200);
-  if (parsed && configured) {
-    Serial.print("DS1307 configured Time=");
-    Serial.print(__TIME__);
-    Serial.print(", Date=");
-    Serial.println(__DATE__);
-  } else if (parsed) {
-    Serial.println("DS1307 Communication Error :-{");
-    Serial.println("Please check your circuitry");
-  } else {
-    Serial.print("Could not parse info from the compiler, Time=\"");
-    Serial.print(__TIME__);
-    Serial.print("\", Date=\"");
-    Serial.print(__DATE__);
-    Serial.println("\"");
-  }
+//  if (parsed && configured) {
+//    Serial.print("DS1307 configured Time=");
+//    Serial.print(__TIME__);
+//    Serial.print(", Date=");
+//    Serial.println(__DATE__);
+//  } else if (parsed) {
+//    Serial.println("DS1307 Communication Error :-{");
+//    Serial.println("Please check your circuitry");
+//  } else {
+//    Serial.print("Could not parse info from the compiler, Time=\"");
+//    Serial.print(__TIME__);
+//    Serial.print("\", Date=\"");
+//    Serial.print(__DATE__);
+//    Serial.println("\"");
+//  }
   lcd.init();
   lcd.backlight(); // เปิด backlight
   lcd.home();
@@ -145,7 +145,7 @@ void refresh_display() {
     print2digitsLCD(tm.Hour);
     lcd.print(":");
     print2digitsLCD(tm.Minute);
-    lcd.print(".");
+    lcd.print(":");
     print2digitsLCD(tm.Second);
   } else {
     if (RTC.chipPresent()) {
