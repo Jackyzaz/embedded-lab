@@ -1,6 +1,6 @@
-const int strobe = 7;
-const int clock = 9;
-const int data = 8;
+const int strobe =4;
+const int clock = 3;
+const int data = 2;
 
 void sendCommand(uint8_t value)
 {
