@@ -29,7 +29,7 @@ void setup()
 
   sendCommand(0x8f);  // activate 7segments and set maximum brightness
   reset();
-  display_Hello();
+//  display_Hello();
 }
 
 void display_Hello()

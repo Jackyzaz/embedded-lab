@@ -64,8 +64,14 @@ void display_all_data_in_EEPROM()
   for (i=0;i<1024;i++)
   {
     c = EEPROM_read1byte(i);
-    if( (i>0) && (i%16==0) )
-        Serial.println("");
+    if( (i>0) && (i%16==0) ) {
+      Serial.println("");
+      // index
+      Serial.print("[");
+      Serial.print(i);
+      Serial.print("]:");
+    }
+    
     if (c < 0x10) Serial.print("0");
     Serial.print(c, HEX);
     Serial.print(" ");
