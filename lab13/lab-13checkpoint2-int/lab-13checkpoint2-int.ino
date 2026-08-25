@@ -9,120 +9,105 @@ uint8_t timer = 0;            // ตัวแปรนับเวลาใน M
 unsigned long last_time = 0;  // เวลาสำหรับ debounce ปุ่มกด
 bool pressed = 0;             // สถานะการกดปุ่มสั่งงาน (ถ้ามี)
 
-volatile uint8_t mode = 1;            // ตัวแปรโหมด
-volatile bool pcf_int_flag = false;   // Flag สัญญาณขัดจังหวะจากขา INT ของ PCF8574
+uint8_t mode = 1;            // ตัวแปรโหมด
+bool pcf_int_flag = false;   // Flag สัญญาณขัดจังหวะจากขา INT ของ PCF8574
 
-// ฟังก์ชันเตรียมข้อมูลส่งให้ PCF8574 
-// (P0-P6 เป็น LED Common Anode แบบ Active LOW, P7 เป็น Input ปุ่มกด)
-uint8_t prepare_data(uint8_t d)
+uint8_t prepare_data(uint8_t d) // ฟังชังก์กลับค่า logic ของ LED CA
 {
   uint8_t tmp;
-  tmp = ~d;                   // กลับบิตเป็นตรงข้ามเนื่องจาก LED เป็น Common Anode
-  tmp |= 0x80;                // เขียน 1 ให้บิต P7 (0x80) เป็น Input ส่วน P0-P6 (0x7F) เป็น Output ขับ LED 7 ดวง
-  return tmp;                 
+  tmp = ~d;
+  tmp |= 0x80;
+  return tmp;
 }
 
-// --- ISR รับสัญญาณขัดจังหวะจากขา INT (Pin 13) ของ PCF8574 ต่อเข้ากับขา D2 (INT0) ของ Arduino ---
+// ISR รับสัญญาณขัดจังหวะ
+// เมื่อสถานะขา Input บน PCF8574 เปลี่ยนแปลงจะขัดจังหวะ CPU
 ISR(INT0_vect)
 {
-  // เมื่อสถานะขา Input บน PCF8574 เปลี่ยนแปลง ขา INT ของ PCF8574 จะส่งสัญญาณ LOW มาขัดจังหวะ Arduino
-  pcf_int_flag = true;
+  pcf_int_flag = true; // set flag แล้วค่อยจัดการใน loop
 }
 
 void setup()
 {
-  last_time = 0;  
+  last_time = 0;
   Serial.begin(38400);
 
-  // --- ตั้งค่าขา D2 (INT0 / PD2) เป็น Input แบบ Pull-up สำหรับรับขาสัญญาณ INT จาก PCF8574 ---
+  // ตั้งค่าขา D2 (INT0 / PD2) เป็น Input
   // (ขา INT ของ PCF8574 เป็น Open-Drain Output จึงต้องเปิด Pull-up บน Arduino)
   DDRD &= ~(1 << DDD2);        // กำหนดให้ขา PD2 เป็น Input
-  PORTD |= (1 << PORTD2);      // เปิดใช้งาน Internal Pull-up resistor บนขา PD2
-  
-  // --- ตั้งค่า External Interrupt 0 (INT0) ให้ทำงานเมื่อเกิดสัญญาณขอบขาลง (Falling Edge) ---
-  EICRA |= (1 << ISC01);
-  EICRA &= ~(1 << ISC00);
+  EICRA |= (1 << ISC01);       // ตั้งค่า External Interrupt 0 (INT0)
+  EICRA &= ~(1 << ISC00);      // ให้ทำงานเมื่อเกิดสัญญาณขอบขาลง (Falling Edge)
   EIMSK |= (1 << INT0);        // เปิดใช้งาน Interrupt INT0
   sei();                       // เปิดการขัดจังหวะระบบ Global Interrupt
 
   init_twi_module();           // เริ่มต้นการทำงานของมอดูล TWI/I2C
-  count = 0;                  
-  PCF8574_write(0, prepare_data(count));      
+  count = 0;
+  PCF8574_write(0, prepare_data(count));
 }
 
 void loop()
-{  
+{
   uint8_t tmp;
-
-  // --- เมื่อขา INT ของ PCF8574 ส่งสัญญาณขัดจังหวะเข้ามา ---
-  if (pcf_int_flag)
+  if (pcf_int_flag)             // เมื่อพบการขัดจังหวะ
   {
-    pcf_int_flag = false;      // ล้าง Flag Interrupt
-
-    // อ่านค่าข้อมูลจาก PCF8574 เพื่อตรวจสอบว่าบิตใดเปลี่ยนแปลง
-    // (หมายเหตุ: การอ่านค่า PCF8574_read() จะทำหน้าที่เคลียร์ขา INT ของ PCF8574 กลับเป็น HIGH โดยอัตโนมัติ)
-    tmp = PCF8574_read(0);
-
-    // ตรวจสอบว่าบิต P7 (ปุ่มเปลี่ยนโหมด) ถูกกดหรือไม่ (Active LOW -> บิต P7 เป็น 0)
-    if (!(tmp & 0x80))
+    pcf_int_flag = false;       // ล้าง Flag Interrupt
+    tmp = PCF8574_read(0);      // อ่านข้อมูลจาก PCF8574
+    if (!(tmp & 0x80))           // ตรวจสอบว่าบิต P7 (ปุ่มเปลี่ยนโหมด) ถูกกดหรือไม่
     {
-      if (millis() - last_time > 200) // Debounce 200ms
+      if (millis() - last_time > 200) // Debounce 200ms`
       {
         last_time = millis();
-        
-        mode++;
-        if (mode > 4) mode = 1;
-
+        mode++;                 // เปลี่ยนโหมด
+        if (mode > 4) mode = 1; // วนโหมด 1->2->3->4->1
         if (mode == 1) {
           count = 0;
           timer = 0;
           PCF8574_write(0, prepare_data(timer));
         } else if (mode == 2) {
-          count = 0x01;            // เริ่มจาก P0 (0x01)
+          count = 0x40;            // เริ่มจากขวา P6 (0x40)
           PCF8574_write(0, prepare_data(count));
         } else if (mode == 3) {
-          count = 0x40;            // เริ่มจาก P6 (0x40)
+          count = 0x01;            // เริ่มจากซ้าย P0 (0x01)
           PCF8574_write(0, prepare_data(count));
         } else if (mode == 4) {
           count = 0x00;
           PCF8574_write(0, prepare_data(count));
         }
-
         Serial.print("Mode Change via PCF8574 INT to ");
         Serial.println(mode);
       }
     }
   }
 
-  // --- การทำงานตามแต่ละ Mode (รองรับ LED 7 ดวง: P0-P6) ---
-  if (mode == 1) {
+  // ควบคุมการแสดงผล
+  if (mode == 1) {                  // M1 โหมดนับขึ้น 7 bit
     delay(100);
     count++;
     if (count >= 10) {
-      timer++; 
-      if (timer > 0x7F) timer = 0; // นับ 7 บิต (0-127 / 0x00-0x7F) สำหรับ LED P0-P6
+      timer++;
+      if (timer > 0x7F) timer = 0;  // นับ 7 บิต (0-127 / 0x00-0x7F) 
+                                    // สำหรับ LED P0-P6
       count = 0;
-      PCF8574_write(0, prepare_data(timer));      
+      PCF8574_write(0, prepare_data(timer));
     }
   }
-  else if (mode == 2) {
-    // ใน Mode 2-4: หากมีการกดปุ่ม จะสลับโหมดผ่าน PCF8574 INT อัตโนมัติ หรือประมวลผลตามโหมด
+  else if (mode == 2) {             // M2 โหมดเลื่อนไฟไปทางขวา
     delay(100);
-    count = count << 1;
+    count = count >> 1;             // right shift
+    if (count == 0)
+      count = 0x40;                 // วนกลับไปที่ P6 (0x40)
+    PCF8574_write(0, prepare_data(count));
+  }
+  else if (mode == 3) {             // M3 โหมดเลื่อนไฟไปทางซ้าย
+    delay(100);
+    count = count << 1;             // left shift
     if (count > 0x40 || count == 0) // ขอบเขตสูงสุดอยู่ที่ P6 (0x40)
       count = 0x01;
-    PCF8574_write(0, prepare_data(count));      
+    PCF8574_write(0, prepare_data(count));
   }
-  else if (mode == 3) {
-    delay(100);
-    count = count >> 1;
-    if (count == 0) 
-      count = 0x40;                 // วนกลับไปที่ P6 (0x40)
-    PCF8574_write(0, prepare_data(count));     
-  }
-  else if (mode == 4) {
+  else if (mode == 4) {             // M4 ติดดับ สลับกัน
     delay(200);
-    count = ~count & 0x7F;           // สลับสถานะ LED 7 ดวง (P0-P6)
-    PCF8574_write(0, prepare_data(count));     
+    count = ~count & 0x7F;          // สลับสถานะ LED 7 ดวง (P0-P6)
+    PCF8574_write(0, prepare_data(count));
   }
 }

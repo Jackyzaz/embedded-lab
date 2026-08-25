@@ -40,7 +40,6 @@ void loop(){
       tmp &= 0x80;
       if (!tmp)
       {
-        
         count++;
         // reset count
         if (count > 127) {

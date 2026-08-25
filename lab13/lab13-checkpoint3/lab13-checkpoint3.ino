@@ -18,9 +18,8 @@ char hexaKeys[ROWS][COLS] = {
 byte rowPins[ROWS] = {7, 6, 5, 4};
 byte colPins[COLS] = {3, 2, 1, 0};
 
-Keypad_I2C keypad( makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS, I2CADDR);
-
-void I2C_bus_scan(void);
+Keypad_I2C keypad( makeKeymap(hexaKeys), rowPins, 
+                  colPins, ROWS, COLS, I2CADDR);
 
 // ตัวแปรสำหรับเครื่องคิดเลข
 long num1 = 0;
@@ -32,7 +31,6 @@ void setup() {
   Wire.begin();
   keypad.begin();
   Serial.begin(38400);
-  I2C_bus_scan();
   Serial.println("--- Simple Calculator Ready ---");
 }
 
@@ -72,7 +70,7 @@ void loop() {
         }
         Serial.println(result);
 
-        // รีเซ็ตค่าเพื่อเตรียมคำนวณรอบถัดไป
+        // รีเซ็ตค่า เตรียมคำนวณในรอบถัดไป
         num1 = 0;
         num2 = 0;
         op = 0;
@@ -89,31 +87,4 @@ void loop() {
       Serial.println("--- Clear ---");
     }
   }
-}
-
-void I2C_bus_scan(void)
-{
-  Serial.println ();
-  Serial.println ("www.9arduino.com ...");
-  Serial.println ("I2C scanner. Scanning ...");
-  byte count = 0;
-  Wire.begin();
-  for (byte i = 8; i < 120; i++) // Loop ค้นหา Address
-  {
-    Wire.beginTransmission (i);
-    if (Wire.endTransmission () == 0)
-    {
-      Serial.print ("Found address: ");
-      Serial.print (i, DEC);
-      Serial.print (" (0x");
-      Serial.print (i, HEX);
-      Serial.println (")");
-      count++;
-      delay (1);
-    }
-  }
-  Serial.println ("Done.");
-  Serial.print ("Found ");
-  Serial.print (count, DEC);
-  Serial.println (" device(s).");
 }
