@@ -18,7 +18,7 @@ void scan_EEPROM(void)
       Serial.print(" is found in EEPROM location[");
       Serial.print(i);
       Serial.println("]");
-//      EEPROM_Erase_only(i);     
+      EEPROM_Erase_only(i);     
     }
     
   }
