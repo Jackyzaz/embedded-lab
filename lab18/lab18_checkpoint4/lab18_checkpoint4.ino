@@ -1,203 +1,194 @@
 // -------------------------------------------------------------
 // Blynk Credentials & Template Info
 // -------------------------------------------------------------
-#define BLYNK_TEMPLATE_ID "TMPL6LF86qGfa"
-#define BLYNK_TEMPLATE_NAME "Checkpoint3"
-#define BLYNK_AUTH_TOKEN "xlNQW7y7m7Q3EtesImkPrpHmbltR93BB"
+#define BLYNK_TEMPLATE_ID "TMPL6n4U-bFxw"
+#define BLYNK_TEMPLATE_NAME "Checkpoint4"
+#define BLYNK_AUTH_TOKEN "qPyisR4Cq87sfRpSp3Zuiwd8Qq0YIzG2"
 #define BLYNK_PRINT Serial
 
 #include <ESP8266WiFi.h>
 #include <BlynkSimpleEsp8266.h>
-int PWMRANGE = 1023;
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
 // WiFi credentials
 char ssid[] = "Jack>/~";
 char pass[] = "nmcu1234";
 
 // -------------------------------------------------------------
-// Pin Definitions
+// Hardware Configuration
 // -------------------------------------------------------------
-// LEDs บนบอร์ด NodeMCU
-#define R_LED 15   // GPIO15 (D8) - แอลอีดีสีแดง
-#define G_LED 2    // GPIO2  (D4) - แอลอีดีสีเขียว
-#define Y_LED 0    // GPIO0  (D3) - แอลอีดีสีเหลือง
+// I2C Pins สำหรับ ESP8266 (NodeMCU)
+// ใช้ D2 (GPIO4) เป็น SDA และ D1 (GPIO5) เป็น SCL
+#define SDA_PIN 4 
+#define SCL_PIN 5 
 
-// DIP Switch Bit 5 - 8 (Mode Control บนบอร์ด)
-#define SW_BIT5 12 // GPIO12 (D6) - ดิปสวิตช์บิตที่ 5
-#define SW_BIT6 13 // GPIO13 (D7) - ดิปสวิตช์บิตที่ 6
-#define SW_BIT7 5  // GPIO5  (D1) - ดิปสวิตช์บิตที่ 7
-#define SW_BIT8 16 // GPIO16 (D0) - ดิปสวิตช์บิตที่ 8
+// Serial EEPROM Config (AT24C32 บนโมดูล DS1307)
+#define EEPROM_ADDR 0x50       // I2C Address ของ AT24C32 ปกติจะเป็น 0x50
+#define EEPROM_START_ADDR 600 // ตำแหน่งแอดเดรสเริ่มต้นในการอ่านและเขียน
 
-// DIP Switch Bit 1 - 2 (จำลอง Sensor สองบิตล่าง)
-#define SW_DOOR_FRONT 4  // GPIO4  (D2) - บิตที่ 1: ประตูหน้าบ้าน
-#define SW_DOOR_BACK  14 // GPIO14 (D5) - บิตที่ 2: ประตูหลังบ้าน
-
-// -------------------------------------------------------------
-// Blynk Virtual Pins Mapping 
-// 1. Button Widgets (บนโทรศัพท์มือถือ):
-//    - V4: ปุ่มควบคุม RED LED
-//    - V5: ปุ่มควบคุม GREEN LED
-//    - V6: ปุ่มควบคุม YELLOW LED
-// 2. LED Widgets (แสดงสถานะเซนเซอร์ 2 ตัว):
-//    - V0: LED Widget "ประตูหน้าบ้านถูกปิดแล้ว" (DIP Switch บิตที่ 1)
-//    - V1: LED Widget "ประตูหลังบ้านถูกปิดแล้ว" (DIP Switch บิตที่ 2)
-// -------------------------------------------------------------
-int blynk_btn_r = 0;
-int blynk_btn_g = 0;
-int blynk_btn_y = 0;
+// LCD Config
+// Address อาจจะเป็น 0x27 หรือ 0x3F ขึ้นอยู่กับโมดูล I2C ที่ใช้
+LiquidCrystal_I2C lcd(0x25, 16, 2); 
 
 BlynkTimer timer;
-
-// ฟังก์ชันรับค่าจาก Button Widgets บนแอป Blynk (V4, V5, V6)
-BLYNK_WRITE(V4) {
-  blynk_btn_r = param.asInt();
-}
-
-BLYNK_WRITE(V5) {
-  blynk_btn_g = param.asInt();
-}
-
-BLYNK_WRITE(V6) {
-  blynk_btn_y = param.asInt();
-}
-
-BLYNK_CONNECTED() {
-  Blynk.syncVirtual(V4, V5, V6);
-}
+String currentMessage = "";
 
 // -------------------------------------------------------------
-// ฟังก์ชันปิด LED ทั้งหมด
+// EEPROM Functions
 // -------------------------------------------------------------
-void turnOffAllLEDs() {
-  analogWrite(R_LED, 0);
-  analogWrite(G_LED, 0);
-  analogWrite(Y_LED, 0);
+// ฟังก์ชันเขียนข้อมูล 1 ไบต์ ลง Serial EEPROM
+void writeEEPROM(unsigned int eeaddress, byte data) {
+  Wire.beginTransmission(EEPROM_ADDR);
+  Wire.write((int)(eeaddress >> 8));   // MSB
+  Wire.write((int)(eeaddress & 0xFF)); // LSB
+  Wire.write(data);
+  Wire.endTransmission();
+  delay(20); // สำคัญ: รอ 20ms ต่อ 1 ตัวอักษร เพื่อให้ชิปมีเวลาเซฟ
 }
 
-// -------------------------------------------------------------
-// Task หลัก: อ่านค่า Switch, คำนวณ Mode ตามตารางที่ 2 และส่งค่า Sensor ไปยัง Blynk
-// -------------------------------------------------------------
-void updateControl() {
-  // 1. อ่านค่า DIP Switch Bit 5-8 (GPIO16, 5, 13, 12)
-  int s16 = digitalRead(SW_BIT8);
-  int s5  = digitalRead(SW_BIT7);
-  int s13 = digitalRead(SW_BIT6);
-  int s12 = digitalRead(SW_BIT5);
+// ฟังก์ชันอ่านข้อความความยาว 8 ตัวอักษร จาก EEPROM (แบบ Sequential Read)
+String readMessageFromEEPROM() {
+  String msg = "";
+  
+  // 1. ตั้งค่า Address Pointer ไปที่ 0x00
+  Wire.beginTransmission(EEPROM_ADDR);
+  Wire.write((int)(EEPROM_START_ADDR >> 8));   // MSB
+  Wire.write((int)(EEPROM_START_ADDR & 0xFF)); // LSB
+  Wire.endTransmission();
+  
+  delay(10); // รอให้บัสว่าง
 
-  // คำนวณรูปแบบ 4 บิต (MSB -> LSB: s16, s5, s13, s12)
-  int mode = (s16 << 3) | (s5 << 2) | (s13 << 1) | s12;
-
-  // ตรวจสอบรอบการกระพริบ 1 วินาทีแบบ Non-blocking (ติด 1s / ดับ 1s รวม 2s)
-  bool blinkState = ((millis() / 1000) % 2) == 0;
-
-  // คำนวณค่า PWM Duty Cycle ตามความสว่างที่กำหนด (PWMRANGE = 1023)
-  int pwm20 = (PWMRANGE * 20) / 100; // ~204 (20%)
-  int pwm50 = (PWMRANGE * 50) / 100; // ~511 (50%)
-  int pwm70 = (PWMRANGE * 70) / 100; // ~716 (70%)
-
-  // 2. ควบคุม LED ทั้งสามดวงตามโหมดในตารางที่ 2
-  switch (mode) {
-    case 0b1000: // 1000: แอลอีดีทุกดวงกระพริบติดดับพร้อมกันทุก ๆ 1 วินาที
-      if (blinkState) {
-        digitalWrite(R_LED, HIGH);
-        digitalWrite(G_LED, HIGH);
-        digitalWrite(Y_LED, HIGH);
-      } else {
-        turnOffAllLEDs();
+  // 2. ขออ่านรวดเดียว 8 ไบต์
+  Wire.requestFrom((uint8_t)EEPROM_ADDR, (uint8_t)8);
+  
+  Serial.print("Raw Read (Seq): ");
+  for (int i = 0; i < 8; i++) {
+    if (Wire.available()) {
+      byte b = Wire.read();
+      Serial.print(b, HEX);
+      Serial.print(" ");
+      
+      // แปลงเป็นตัวอักษรถ้าไม่ใช่ค่าว่าง
+      if (b != 0xFF && b != 0x00) {
+        msg += (char)b;
       }
-      break;
-
-    case 0b1001: // 1001: แอลอีดีสีแดงถูกควบคุมโดย Button บนมือถือ (V4), ดวงอื่นดับตลอดเวลา
-      digitalWrite(R_LED, blynk_btn_r );
-      digitalWrite(G_LED, LOW);
-      digitalWrite(Y_LED, LOW);
-      break;
-
-    case 0b1010: // 1010: แอลอีดีสีเขียวถูกควบคุมโดย Button บนมือถือ (V5), ดวงอื่นดับตลอดเวลา
-      digitalWrite(R_LED, LOW);
-      digitalWrite(G_LED, blynk_btn_g );
-      digitalWrite(Y_LED, LOW);
-      break;
-
-    case 0b1011: // 1011: แอลอีดีสีเหลืองถูกควบคุมโดย Button บนมือถือ (V6), ดวงอื่นดับตลอดเวลา
-      digitalWrite(R_LED, LOW);
-      digitalWrite(G_LED, LOW);
-      digitalWrite(Y_LED, blynk_btn_y );
-      break;
-
-    case 0b0100: // 0100: แอลอีดีทั้งสามดวงถูกควบคุมโดย Button บนโทรศัพท์มือถือ (V4, V5, V6)
-      digitalWrite(R_LED, blynk_btn_r );
-      digitalWrite(G_LED, blynk_btn_g );
-      digitalWrite(Y_LED, blynk_btn_y );
-      break;
-
-    case 0b0101: // 0101: แอลอีดีสีแดงกระพริบติดสลับดับทุก ๆ 1 วินาที ความสว่าง 20%
-      if (blinkState) {
-        analogWrite(R_LED, pwm20);
-      } else {
-        analogWrite(R_LED, 0);
-      }
-      digitalWrite(G_LED, LOW);
-      digitalWrite(Y_LED, LOW);
-      break;
-
-    case 0b0110: // 0110: แอลอีดีสีเขียวกระพริบติดสลับดับทุก ๆ 1 วินาที ความสว่าง 50%
-      if (blinkState) {
-        analogWrite(G_LED, pwm50);
-      } else {
-        analogWrite(G_LED, 0);
-      }
-      digitalWrite(R_LED, LOW);
-      digitalWrite(Y_LED, LOW);
-      break;
-
-    case 0b0111: // 0111: แอลอีดีสีเหลืองกระพริบติดสลับดับทุก ๆ 1 วินาที ความสว่าง 70%
-      if (blinkState) {
-        analogWrite(Y_LED, pwm70);
-      } else {
-        analogWrite(Y_LED, 0);
-      }
-      digitalWrite(R_LED, LOW);
-      digitalWrite(G_LED, LOW);
-      break;
-
-    default: // รูปแบบอื่น ๆ ให้ดับ LED ทั้งหมดเพื่อความปลอดภัย
-      turnOffAllLEDs();
-      break;
+    } else {
+      Serial.print("ERR "); // ถ้าอ่านไม่ได้
+    }
   }
+  Serial.println();
+  
+  return msg;
+}
 
-  // 3. อ่านค่า DIP Switch สองบิตล่าง (Bit 1 และ Bit 2) ส่งไปยัง Blynk LED Widget
-  int doorFrontStatus = digitalRead(SW_DOOR_FRONT); // 1 = สวิตช์เปิด/ปิดประตูหน้าบ้าน
-  int doorBackStatus  = digitalRead(SW_DOOR_BACK);  // 1 = สวิตช์เปิด/ปิดประตูหลังบ้าน
+// ฟังก์ชันเขียนข้อความลง EEPROM (บันทึกทีละไบต์)
+void writeMessageToEEPROM(String msg) {
+  Serial.print("Raw Write: ");
+  for (int i = 0; i < 8; i++) {
+    byte b;
+    if (i < msg.length()) {
+      b = msg[i];
+    } else {
+      b = '\0'; // เติม NULL ถ้าความยาวไม่ถึง 8
+    }
+    Serial.print(b, HEX);
+    Serial.print(" ");
+    
+    writeEEPROM(EEPROM_START_ADDR + i, b);
+    yield(); // ป้องกัน Watchdog Timer รีเซ็ตบอร์ดระหว่างหน่วงเวลาเขียน
+  }
+  Serial.println();
+}
 
-  // ส่งค่าสถานะไปยัง LED Widget บน Blynk (255 = ติดสว่าง, 0 = ดับ)
-  Blynk.virtualWrite(V0, doorFrontStatus ? 255 : 0);
-  Blynk.virtualWrite(V1, doorBackStatus ? 255 : 0);
+// -------------------------------------------------------------
+// LCD Display Function
+// -------------------------------------------------------------
+// ฟังก์ชันแสดงผลข้อความลงจอ LCD
+void updateLCD(String msg) {
+  Serial.println("LCD Log: Updating display with message: [" + msg + "]");
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("EEPROM Msg:");
+  lcd.setCursor(0, 1);
+  lcd.print(msg);
+}
+
+// -------------------------------------------------------------
+// Blynk Event: รอรับค่าจากแอป
+// -------------------------------------------------------------
+// ใช้ Text Input Widget หรือ Terminal กำหนดเป็น Virtual Pin V7
+BLYNK_WRITE(V7) {
+  String newMsg = param.asStr();
+  
+  // ตัดข้อความให้เหลือแค่ 8 ตัวอักษรตาม Requirement
+  if (newMsg.length() > 8) {
+    newMsg = newMsg.substring(0, 8);
+  }
+  
+  Serial.println("Received from Blynk: " + newMsg);
+  
+  // บันทึกข้อความใหม่ลง EEPROM
+  writeMessageToEEPROM(newMsg);
+  
+  // อัปเดตตัวแปรปัจจุบันและแสดงผลบนจอ LCD
+  currentMessage = newMsg;
+  updateLCD(currentMessage);
+}
+
+// ฟังก์ชันสแกนหา I2C Slave ทั้งหมด (1 - 127)
+void scanI2C() {
+  Serial.println("\n--- Scanning all I2C Addresses (1 - 127) ---");
+  int devicesFound = 0;
+  for (byte address = 1; address < 127; address++) {
+    Wire.beginTransmission(address);
+    byte error = Wire.endTransmission();
+    if (error == 0) {
+      Serial.print("-> Found I2C Device at address: 0x");
+      if (address < 16) Serial.print("0");
+      Serial.println(address, HEX);
+      devicesFound++;
+    }
+  }
+  if (devicesFound == 0) {
+    Serial.println("-> NO I2C DEVICES FOUND!");
+  }
+  Serial.println("--------------------------------------------\n");
 }
 
 void setup() {
   Serial.begin(115200);
+  delay(500); // รอให้ Serial Monitor เปิดทัน
+  Serial.println("\n\n--- Checkpoint 4 System Starting ---");
 
-  // กำหนดโหมดขา LED
-  pinMode(R_LED, OUTPUT);
-  pinMode(G_LED, OUTPUT);
-  pinMode(Y_LED, OUTPUT);
-  turnOffAllLEDs();
+  // กำหนดค่าเริ่มต้น I2C (SDA, SCL)
+  Serial.println("Step 1: Initializing I2C (SDA=" + String(SDA_PIN) + ", SCL=" + String(SCL_PIN) + ")");
+  Wire.begin(SDA_PIN, SCL_PIN);
+  
+  scanI2C(); // สแกนหา I2C Address ของจอ LCD
+  
+  // ตั้งค่าจอ LCD
+  Serial.println("Step 2: Initializing LCD...");
+  lcd.init();      
+  lcd.backlight();
+  
+  Serial.println("Step 3: Printing initial text to LCD...");
+  lcd.setCursor(0, 0);
+  lcd.print("Init EEPROM...");
+  delay(1000);
 
-  // กำหนดโหมดขา Mode DIP Switch (Bit 5 - Bit 8)
-  pinMode(SW_BIT5, INPUT);
-  pinMode(SW_BIT6, INPUT);
-  pinMode(SW_BIT7, INPUT);
-  pinMode(SW_BIT8, INPUT);
+  // อ่านข้อความเดิมที่ถูกเก็บไว้ใน EEPROM
+  Serial.println("Step 4: Reading from EEPROM...");
+  currentMessage = readMessageFromEEPROM();
+  Serial.println("-> Read result: [" + currentMessage + "]");
+  
+  // แสดงผลบนจอ LCD 
+  updateLCD(currentMessage);
 
-  // กำหนดโหมดขา Sensor DIP Switch (Bit 1 - Bit 2)
-  pinMode(SW_DOOR_FRONT, INPUT);
-  pinMode(SW_DOOR_BACK, INPUT);
-
-  // เริ่มเชื่อมต่อ Blynk
+  // เริ่มการเชื่อมต่อ WiFi และ Blynk
+  Serial.println("Step 5: Connecting to WiFi & Blynk...");
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
-
-  // ตั้งเวลาเรียกฟังก์ชัน updateControl ทุกๆ 100 ms (Non-blocking)
-  timer.setInterval(100L, updateControl);
+  Serial.println("-> Blynk connected successfully!");
 }
 
 void loop() {
