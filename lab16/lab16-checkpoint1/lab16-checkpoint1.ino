@@ -3,15 +3,16 @@
 #define G_LED 4
 #define Y_LED 5
 #define PUSH_SW 2
-int display = 0; //if display=1 then turn on only Red LED
-//if display=2 then turn on only Green LED
-//if display=3 then turn on only Yellow LED
+int display = 0;          //if display=1 then turn on only Red LED
 void setup() {
   xTaskCreate(Read_Switch, "Read push button switch", 128, NULL, 1, NULL);
   xTaskCreate(Display_R_LED, "Red LED Task", 128, NULL, 1, NULL);
   xTaskCreate(Display_G_LED, "Green LED Task", 128, NULL, 1, NULL);
   xTaskCreate(Display_Y_LED, "Yellow LED Task", 128, NULL, 1, NULL);
   vTaskStartScheduler();
+}
+void loop() {
+  // empty loop 
 }
 void Display_R_LED(void *pvParameters)
 {
@@ -74,4 +75,3 @@ void Read_Poten(void *pvParameters)
     Serial.println(val);
   }
 }
-void loop() {}
