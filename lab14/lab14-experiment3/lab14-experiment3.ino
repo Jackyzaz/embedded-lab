@@ -3,7 +3,7 @@
 #include <Keypad.h>
 #include <Wire.h>
 
-#define I2CADDR 0x38
+#define I2CADDR 0x20
 
 const byte ROWS = 4;
 const byte COLS = 4;
@@ -35,6 +35,7 @@ void setup()
   lcd.print("CoE PSU");
   lcd.setCursor(0, 1);
   lcd.print("Press Keypad...");
+  Serial.begin(38400);
 }
 
 void loop()
@@ -47,6 +48,7 @@ void loop()
       lcd.print(" ");
     lcd.setCursor(0, 1);
     lcd.print(key);
+    Serial.println(key);
     lcd.print(" key pressed");
   }
 

@@ -5,7 +5,7 @@
 #include <TimeLib.h>
 #include <DS1307RTC.h>
 
-#define I2CADDR 0x38
+#define I2CADDR 0x20
 
 const byte ROWS = 4;
 const byte COLS = 4;
