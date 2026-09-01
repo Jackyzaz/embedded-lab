@@ -44,6 +44,14 @@ void print_serial_time(void);
 void print2digits(int number);
 void print2digitsLCD(int number);
 
+// FreeRTOS Stack Overflow Hook เพื่อตรวจจับและพิมพ์ชื่อ Task ที่ Stack ล้น
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
+  (void) xTask;
+  Serial.print(F("[FATAL] Stack Overflow in: "));
+  Serial.println(pcTaskName);
+  while (1);
+}
+
 void print2digits(int number) {
   if (number >= 0 && number < 10) {
     Serial.print('0');
@@ -101,6 +109,10 @@ void setup() {
   Serial.println();
   Serial.println(F("Lab19.2 RTOS Checkpoint 2"));
 
+  // ดับไฟ LED บนบอร์ด (Pin 13) เริ่มต้น
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);
+
   // 1. สร้าง Mutex สำหรับควบคุม I2C Bus ก่อนเริ่ม Task
   xI2CMutex = xSemaphoreCreateMutex();
 
@@ -120,15 +132,20 @@ void setup() {
     tm.Day = 1;
     tm.Month = 1;
     tm.Year = CalendarYrToTm(2026);
+    tm.Wday = 1;
   }
   refresh_display();
   print_serial_time();
 
-  // 4. กำหนดขนาด Stack ที่สมดุล (Keypad: 125 words, Clock: 130 words)
-  xTaskCreate(Task_Keypad, "KeypadTask", 125, NULL, 2, NULL);
-  xTaskCreate(Task_Clock_Display, "ClockTask", 130, NULL, 1, NULL);
+  // 4. กำหนดขนาด Stack ที่เพียงพอและปลอดภัย (Keypad: 150 words, Clock: 140 words)
+  BaseType_t t1 = xTaskCreate(Task_Keypad, "KeypadTask", 150, NULL, 2, NULL);
+  BaseType_t t2 = xTaskCreate(Task_Clock_Display, "ClockTask", 140, NULL, 1, NULL);
 
-  Serial.println(F("[OK] Scheduler Starting..."));
+  if (t1 != pdPASS || t2 != pdPASS) {
+    Serial.println(F("[FAIL] Out of Memory!"));
+  } else {
+    Serial.println(F("[OK] Scheduler Starting..."));
+  }
   Serial.flush();
 
   // 5. เริ่มต้นการทำงานของ RTOS Scheduler
@@ -152,6 +169,8 @@ void Task_Clock_Display(void *pvParameters) {
         if (RTC.read(tm)) {
           refresh_display();
           print_serial_time();
+        } else {
+          Serial.println(F("[WARN] RTC.read failed!"));
         }
         xSemaphoreGive(xI2CMutex);
       }
@@ -294,6 +313,8 @@ void Task_Keypad(void *pvParameters) {
         } else if (key == '#') {
           // กด '#' บันทึกเวลาลง DS1307
           tm.Second = 0;
+          if (tm.Wday < 1 || tm.Wday > 7) tm.Wday = 1;
+
           if (xSemaphoreTake(xI2CMutex, pdMS_TO_TICKS(200)) == pdTRUE) {
             if (RTC.write(tm)) {
               Serial.println(F("[/] Write New Time Success"));
@@ -355,6 +376,9 @@ void Task_Keypad(void *pvParameters) {
           }
         } else if (key == '#') {
           // กด '#' บันทึกวันที่ลง DS1307
+          tm.Second = 0; // เคลียร์วินาทีเป็น 0 และปลดล็อก Clock Halt (CH bit = 0)
+          if (tm.Wday < 1 || tm.Wday > 7) tm.Wday = 1; // กำหนด Day of Week ให้ถูกต้อง (1-7)
+
           if (xSemaphoreTake(xI2CMutex, pdMS_TO_TICKS(200)) == pdTRUE) {
             if (RTC.write(tm)) {
               Serial.println(F("[/] Write New Date Success"));
