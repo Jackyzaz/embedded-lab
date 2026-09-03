@@ -137,15 +137,13 @@ void setup() {
   refresh_display();
   print_serial_time();
 
-  // 4. กำหนดขนาด Stack ที่เพียงพอและปลอดภัย (Keypad: 150 words, Clock: 140 words)
-  BaseType_t t1 = xTaskCreate(Task_Keypad, "KeypadTask", 150, NULL, 2, NULL);
-  BaseType_t t2 = xTaskCreate(Task_Clock_Display, "ClockTask", 140, NULL, 1, NULL);
+  // 4. จัดลำดับ Priority ใหม่:
+  // ClockTask: Priority 2 (สูงสุด) เพื่อให้อ่าน RTC และเขียนจอ LCD ได้อย่างราบรื่นไม่โดนขัด
+  // KeypadTask: Priority 1 สแกนปุ่มกดทุก 60ms ในช่วงที่ ClockTask หลับพัก
+  xTaskCreate(Task_Clock_Display, "ClockTask", 200, NULL, 2, NULL);
+  xTaskCreate(Task_Keypad, "KeypadTask", 200, NULL, 1, NULL);
 
-  if (t1 != pdPASS || t2 != pdPASS) {
-    Serial.println(F("[FAIL] Out of Memory!"));
-  } else {
-    Serial.println(F("[OK] Scheduler Starting..."));
-  }
+  Serial.println(F("[OK] Scheduler Starting..."));
   Serial.flush();
 
   // 5. เริ่มต้นการทำงานของ RTOS Scheduler
@@ -157,24 +155,22 @@ void loop() {
 }
 
 // 
-// Task 1: จัดการเวลา และควบคุมการแสดงผลบนหน้าจอ LCD
+// Task 1: จัดการเวลา และควบคุมการแสดงผลบนหน้าจอ LCD (Priority 2 - สูงสุด)
 // 
 void Task_Clock_Display(void *pvParameters) {
   (void) pvParameters;
 
   while (1) {
     if (mode == 0) {
-      // --- Running Mode: อ่านเวลาจาก RTC และแสดงผลทุก 1 วินาที ---
+      // --- Running Mode: ตรวจเช็คเวลาจาก RTC ทุก 500ms เพื่อความลื่นไหลของเข็มวินาที ---
       if (xSemaphoreTake(xI2CMutex, pdMS_TO_TICKS(200)) == pdTRUE) {
         if (RTC.read(tm)) {
           refresh_display();
           print_serial_time();
-        } else {
-          Serial.println(F("[WARN] RTC.read failed!"));
         }
         xSemaphoreGive(xI2CMutex);
       }
-      vTaskDelay(pdMS_TO_TICKS(1000));
+      vTaskDelay(pdMS_TO_TICKS(500));
     } else if (mode == 1) {
       // --- Setting Time Mode: กระพริบหลักเวลาทุก 500ms ---
       if (xSemaphoreTake(xI2CMutex, pdMS_TO_TICKS(200)) == pdTRUE) {
@@ -236,7 +232,7 @@ void Task_Clock_Display(void *pvParameters) {
 }
 
 // 
-// Task 2: สแกน Keypad และประมวลผลคำสั่งตั้งค่า (State Machine)
+// Task 2: สแกน Keypad และประมวลผลคำสั่งตั้งค่า (Priority 1)
 // 
 void Task_Keypad(void *pvParameters) {
   (void) pvParameters;
@@ -393,7 +389,7 @@ void Task_Keypad(void *pvParameters) {
       }
     }
 
-    // หน่วงเวลาสแกนปุ่ม 40ms (Non-blocking delay สลับให้ Task อื่นทำงาน)
-    vTaskDelay(pdMS_TO_TICKS(40));
+    // หน่วงเวลาสแกนปุ่ม 60ms เพื่อลดการยิงคำสั่ง I2C Bus รัวเกินไป
+    vTaskDelay(pdMS_TO_TICKS(60));
   }
 }

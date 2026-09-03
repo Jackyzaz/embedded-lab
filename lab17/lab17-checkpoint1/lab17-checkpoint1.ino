@@ -1,13 +1,10 @@
 #include "my_EEPROM.h"
-
 int max_addr = -1;
-
 int scan_EEPROM(void)
 {
   int i, number_data_found = 0;
   uint8_t d;
   max_addr = -1; // รีเซ็ตก่อนสแกนทุกครั้ง
-  
   Serial.println("Performing EEPROM scanning...");
   for(i=0; i<1024; i++)
   {
@@ -16,19 +13,17 @@ int scan_EEPROM(void)
     {
       max_addr = i;
       number_data_found++;
-      if (d < 0x10) Serial.print("0");
+      if (d < 0x10) Seria l.print("0");
       Serial.print(d, HEX);
       Serial.print(" is found in EEPROM location[");
       Serial.print(i);
       Serial.println("]");     
     }
   }
-  
   if (number_data_found > 1)
     Serial.println("More than one data are found in EEPROM");
   else if(number_data_found == 0)
     Serial.println("no data found in EEPROM");
-
   return number_data_found;
 }
 

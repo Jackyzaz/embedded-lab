@@ -7,15 +7,12 @@
 
 const byte ROWS = 4;
 const byte COLS = 4;
-
-// Keypad mapping
-char hexaKeys[ROWS][COLS] = {
+char hexaKeys[ROWS][COLS] = { // Keypad mapping
   {'1', '2', '3', 'A'},
   {'4', '5', '6', 'B'},
   {'7', '8', '9', 'C'},
   {'E', '0', 'F', 'D'},
 };
-
 byte rowPins[ROWS] = {7, 6, 5, 4};
 byte colPins[COLS] = {3, 2, 1, 0};
 
@@ -34,22 +31,8 @@ uint8_t lastButtons = 0;
 
 // 7-Segment Font Table (0-9, A-F)
 const uint8_t digitFont[16] = {
-  0x3F, // 0
-  0x06, // 1
-  0x5B, // 2
-  0x4F, // 3
-  0x66, // 4
-  0x6D, // 5
-  0x7D, // 6
-  0x07, // 7
-  0x7F, // 8
-  0x6F, // 9
-  0x77, // A
-  0x7C, // b
-  0x39, // C
-  0x5E, // d
-  0x79, // E
-  0x71  // F
+  0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07,
+  0x7F, 0x6F, 0x77, 0x7C, 0x39, 0x5E, 0x79, 0x71
 };
 
 // State Machine
@@ -69,6 +52,7 @@ int scan_EEPROM(void);
 void sendCommand(uint8_t value);
 void reset(void);
 uint8_t readTM1638_Buttons(void);
+
 void updateDisplay(uint8_t digits[8]);
 void handleBlink(void);
 void handleButtons(void);
@@ -78,68 +62,47 @@ void receive_data(void);
 void I2C_bus_scan(void);
 
 void setup() {
-  // ตั้งค่าขาควบคุมของ TM1638 ให้เป็น OUTPUT
-  pinMode(strobe, OUTPUT);
+  pinMode(strobe, OUTPUT);     // ตั้งค่าขาควบคุมของ TM1638 ให้เป็น OUTPUT
   pinMode(clock, OUTPUT);
   pinMode(data, OUTPUT);
-  digitalWrite(strobe, HIGH);
-  digitalWrite(clock, HIGH);
+  sendCommand(0x8F);           // เปิดการทำงานหน้าจอแสดงผล (ความสว่างสูงสุด)
 
-  Wire.begin();
-  keypad.begin();
-  Serial.begin(38400);
-
-  I2C_bus_scan();
-
-  currentState = ST1;
-  sendCommand(0x8F);  // Activate 7-segment display and set brightness
-  reset();
+  Wire.begin();                // เริ่มใช้งานมอดูล TWI
+  keypad.begin();              // เริ่มต้นการใช้ keypad i2c
+  Serial.begin(38400);         // ตั้งค่า Serial montior
+  I2C_bus_scan();              // สแกนค่าต้ำแหน่ง
+  currentState = ST1;          // State Reset เริ่มที่ ST1
+  reset();                     // reset จอ TM1638
 }
 
 void loop() {
-  handleBlink();
-  handleButtons();
-
-  // State Actions
-  switch (currentState) {
+  handleBlink();              // จัดการ Blink เมื่อตั้งค่า
+  handleButtons();            // จัดการกดปุ่ม
+  switch (currentState) {     // ควบคุม output ของ state
     case ST1:
-      // รอกดปุ่ม (หน้าจอดับ)
-      break;
-
+      // รอกดปุ่ม (หน้าจอดับ) break;
     case ST2:
-      display_all_data_in_EEPROM();
-      scan_EEPROM();
-      currentState = ST1;
-      break;
-
+      display_all_data_in_EEPROM(); scan_EEPROM();
+      currentState = ST1; break;
     case ST3:
-      receive_address();
-      break;
-
+      receive_address();  break;
     case ST4:
-      receive_data();
-      break;
-
+      receive_data();     break;
     case ST5:
       Serial.print("Writing 0x");
       if (data_input < 0x10) Serial.print("0");
       Serial.print(data_input, HEX);
       Serial.print(" to EEPROM Address: ");
       Serial.println(input_address);
-
       EEPROM_Erase_and_Write1B(input_address, data_input);
       data_input = 0;
       input_address = 0;
       currentState = ST1;
       break;
   }
-
   renderDisplay();
 }
-
-// 
-// Display & Blinking
-// 
+ 
 void handleBlink() {
   unsigned long currentMillis = millis();
   if (currentMillis - lastBlinkTime >= BLINK_INTERVAL) {
@@ -181,25 +144,12 @@ void renderDisplay() {
       }
       break;
   }
-
   updateDisplay(digits);
 }
 
-void updateDisplay(uint8_t digits[8]) {
-  sendCommand(0x40); // Set auto-increment mode
-  digitalWrite(strobe, LOW);
-  shiftOut(data, clock, LSBFIRST, 0xC0);
-  for (uint8_t i = 0; i < 8; i++) {
-    shiftOut(data, clock, LSBFIRST, digits[i]); // 7-Segment digit
-    shiftOut(data, clock, LSBFIRST, 0x00);      // Discrete LED (OFF)
-  }
-  digitalWrite(strobe, HIGH);
-}
 
-// 
-// Keypad & Buttons Handlers
-// 
-void handleButtons() {
+ 
+void handleButtons() {  // ควบคุมการเปลี่ยน State
   uint8_t currentButtons = readTM1638_Buttons();
   uint8_t pressed = currentButtons & (~lastButtons); // Edge Detection (กดครั้งแรก)
   lastButtons = currentButtons;
@@ -209,27 +159,21 @@ void handleButtons() {
   if (s1_pressed) {
     switch (currentState) {
       case ST1:
-        currentState = ST2;
-        break;
+        currentState = ST2; break;
       case ST4:
-        currentState = ST5;
-        break;
-      default:
-        break;
+        currentState = ST5; break;
+      default: break;
     }
   }
   if (s8_pressed) {
     switch (currentState) {
       case ST1:
         currentState = ST3;
-        input_address = 0;
-        break;
+        input_address = 0; break;
       case ST3:
-        currentState = ST4;
-        break;
+        currentState = ST4; break;
       case ST4:
-        currentState = ST3;
-        break;
+        currentState = ST3; break;
       default:
         break;
     }
@@ -304,6 +248,18 @@ int scan_EEPROM(void)
 // 
 // TM1638 Hardware Low-Level Functions
 // 
+
+void updateDisplay(uint8_t digits[8]) {
+  sendCommand(0x40); // Set auto-increment mode
+  digitalWrite(strobe, LOW);
+  shiftOut(data, clock, LSBFIRST, 0xC0);
+  for (uint8_t i = 0; i < 8; i++) {
+    shiftOut(data, clock, LSBFIRST, digits[i]); // 7-Segment digit
+    shiftOut(data, clock, LSBFIRST, 0x00);      // Discrete LED (OFF)
+  }
+  digitalWrite(strobe, HIGH);
+}
+
 void sendCommand(uint8_t value) {
   digitalWrite(strobe, LOW);
   shiftOut(data, clock, LSBFIRST, value);

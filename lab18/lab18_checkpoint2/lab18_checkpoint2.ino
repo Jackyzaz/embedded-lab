@@ -3,6 +3,7 @@
 #define G_LED 2
 #define SW1 4
 #define SW8 16
+
 /*************************************************************
   This is a simple demo of sending and receiving some data.
   Be sure to check out other examples!
@@ -11,13 +12,14 @@
 #define BLYNK_TEMPLATE_NAME "Checkpoint2"
 #define BLYNK_AUTH_TOKEN "AqPpnRT0orAIv1qAAoti7-bB9Kcd-UmC"
 /* Comment this out to disable prints and save space */
+
 #define BLYNK_PRINT Serial
 #include <ESP8266WiFi.h>
 #include <BlynkSimpleEsp8266.h>
-// Your WiFi credentials.
-// Set password to "" for open networks.
-char ssid[] = "Jack>/~";
+
+char ssid[] = "Jack>/~";  // ใช้ wifi hotspot จากโทรศัพท์
 char pass[] = "nmcu1234";
+
 BlynkTimer timer;
 // This function is called every time the Virtual Pin 0 state changes
 BLYNK_WRITE(V0)

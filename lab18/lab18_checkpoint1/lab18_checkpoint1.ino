@@ -9,23 +9,24 @@
 #define SW_13 13  // S13
 #define SW_5  5   // S7
 
+// Helper function
+void setLED(bool r, bool y, bool g) { 
+  digitalWrite(LED_R, r);         
+  digitalWrite(LED_Y, y);
+  digitalWrite(LED_G, g);
+}
+
 void setup() {
-  pinMode(LED_R, OUTPUT);
+  pinMode(LED_R, OUTPUT);   // ตั้งค่า Output LED
   pinMode(LED_Y, OUTPUT);
   pinMode(LED_G, OUTPUT);
 
-  pinMode(SW_16, INPUT);
+  pinMode(SW_16, INPUT);    // ตั้งค่า Dip Switch
   pinMode(SW_12, INPUT);
   pinMode(SW_13, INPUT);
   pinMode(SW_5, INPUT);
 
-  Serial.begin(115200);
-}
-
-void setLED(bool r, bool y, bool g) {
-  digitalWrite(LED_R, r );
-  digitalWrite(LED_Y, y );
-  digitalWrite(LED_G, g );
+  Serial.begin(115200);     // ตั้งค่า Serial Communication
 }
 
 void loop() {
@@ -48,24 +49,19 @@ void loop() {
     delay(1000);
   } 
   else if (s16 == 0 && s5 == 0 && s13 == 0 && s12 == 0) {
-    // all off
-    setLED(0, 0, 0);
+    setLED(0, 0, 0);  // LED ดับทุกดวง
   } 
   else if (s16 == 0 && s5 == 0 && s13 == 0 && s12 == 1) {
-    // red green
-    setLED(1, 1, 0);
+    setLED(1, 1, 0);  // LED แดงและเขียวติด
   } 
   else if (s16 == 0 && s5 == 0 && s13 == 1 && s12 == 0) {
-    // red yellow
-    setLED(1, 0, 1);
+    setLED(1, 0, 1);  // LED แดงและเหลืองติด
   } 
   else if (s16 == 0 && s5 == 0 && s13 == 1 && s12 == 1) {
-    // green yellow
-    setLED(0, 1, 1);
+    setLED(0, 1, 1);  // LED เขียวและเหลืองติด
   } 
   else if (s16 == 0 && s5 == 1 && s13 == 0 && s12 == 0) {
-    // all blink
-    setLED(1, 1, 1);
+    setLED(1, 1, 1);  // LED ทุกดวงติดสลับดับ
     delay(1000);
     setLED(0, 0, 0);
     delay(1000);
