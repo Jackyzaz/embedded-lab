@@ -7,8 +7,7 @@
 #include <TimeLib.h>
 #include <DS1307RTC.h>
 
-// I2C Address ของ PCF8574 สำหรับ Keypad
-#define I2CADDR 0x20
+#define I2CADDR 0x20    // Address ของ PCF8574 สำหรับ Keypad
 
 const byte ROWS = 4;
 const byte COLS = 4;
@@ -42,13 +41,13 @@ void refresh_display(void);
 void print2digits(int number);
 void print2digitsLCD(int number);
 
+// LCD Helper function
 void print2digits(int number) {
   if (number >= 0 && number < 10) {
     Serial.print('0');
   }
   Serial.print(number);
 }
-
 void print2digitsLCD(int number) {
   if (number >= 0 && number < 10) {
     lcd.print('0');
@@ -94,40 +93,33 @@ void setup() {
   Serial.begin(9600);
   Serial.println();
   Serial.println("Lab19.1 RTOS 2");
-
+  
   // 1. สร้าง Mutex สำหรับควบคุม I2C Bus ก่อนเริ่ม Task
   xI2CMutex = xSemaphoreCreateMutex();
   if (xI2CMutex != NULL) {
     Serial.println("[1] I2C Mutex created successfully");
   }
-
+  xjl
   // 2. กำหนดค่าเริ่มต้นให้กับอุปกรณ์ I2C
   Wire.begin();
-
   keypad.begin();
   lcd.init();
   lcd.backlight();
   lcd.home();
   Serial.println("[2] I2C Devices Initialized");
-
+  
   // 3. อ่านค่าเวลาเริ่มต้นจาก DS1307
   if (RTC.read(tm)) {
     Serial.println("[3] RTC read initial success");
   } else {
     Serial.println("[3] RTC read initial failed, using fallback");
-    tm.Hour = 12;
-    tm.Minute = 0;
-    tm.Second = 0;
-    tm.Day = 1;
-    tm.Month = 1;
-    tm.Year = CalendarYrToTm(2026);
+    while(1); // Blocking
   }
   refresh_display();
 
-  // 4. สร้าง FreeRTOS Tasks ด้วย Stack ขนาด 150-160 words เพื่อความปลอดภัย
-  BaseType_t t1 = xTaskCreate(Task_Keypad, "KeypadTask", 150, NULL, 2, NULL);
+  // 4. สร้าง FreeRTOS Tasks ด้วย Stack ขนาด 160 words
+  BaseType_t t1 = xTaskCreate(Task_Keypad, "KeypadTask", 160, NULL, 2, NULL);
   BaseType_t t2 = xTaskCreate(Task_Clock_Display, "ClockTask", 160, NULL, 1, NULL);
-
   if (t1 == pdPASS && t2 == pdPASS) {
     Serial.println("[4] Tasks created successfully. Starting Scheduler...");
   } else {
@@ -142,9 +134,7 @@ void loop() {
   // empty loop
 }
 
-// 
 // Task 1: จัดการเวลา และควบคุมการแสดงผลบนหน้าจอ LCD
-// 
 void Task_Clock_Display(void *pvParameters) {
   (void) pvParameters;
 
@@ -158,6 +148,7 @@ void Task_Clock_Display(void *pvParameters) {
         xSemaphoreGive(xI2CMutex);
       }
       vTaskDelay(pdMS_TO_TICKS(1000));
+      
     } else {
       // --- Setting Mode: ทำการกะพริบหลักที่กำลังเลือกแก้ไขทุก 500ms ---
       if (xSemaphoreTake(xI2CMutex, pdMS_TO_TICKS(200)) == pdTRUE) {
@@ -187,9 +178,7 @@ void Task_Clock_Display(void *pvParameters) {
   }
 }
 
-// 
 // Task 2: สแกน Keypad และประมวลผลคำสั่งตั้งเวลา (State Machine)
-// 
 void Task_Keypad(void *pvParameters) {
   (void) pvParameters;
 
@@ -269,7 +258,6 @@ void Task_Keypad(void *pvParameters) {
         }
       }
     }
-
     // หน่วงเวลาสแกนปุ่ม 40ms (Non-blocking delay สลับให้ Task อื่นทำงาน)
     vTaskDelay(pdMS_TO_TICKS(40));
   }

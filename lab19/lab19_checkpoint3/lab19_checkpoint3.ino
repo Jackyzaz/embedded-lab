@@ -7,9 +7,7 @@
 #include <TimeLib.h>
 #include <DS1307RTC.h>
 
-
 // Hardware & I2C Address Configuration
-
 #define KEYPAD_I2C_ADDR 0x20   // I2C Address ของ PCF8574 สำหรับ Keypad
 #define LCD_I2C_ADDR    0x27   // I2C Address ของ LCD 1602
 #define EEPROM_ADDR     0x50   // I2C Address ของ 24C32 บนโมดูล DS1307 RTC
@@ -27,8 +25,6 @@ char hexaKeys[ROWS][COLS] = {
 byte rowPins[ROWS] = {7, 6, 5, 4};
 byte colPins[COLS] = {3, 2, 1, 0};
 
-
-// Global States & FreeRTOS Variables
 
 volatile int mode = 0;             // 0 = running mode, 1 = set time, 2 = set date
 volatile int select_time = 0;      // 0 = hour, 1 = minute
@@ -74,7 +70,6 @@ void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
 
 
 // EEPROM 24C32 Low-Level Functions (I2C Address 0x50)
-
 // ฟังก์ชันอ่านข้อมูล 1 ไบต์จาก Serial EEPROM 24C32
 uint8_t readEEPROM(unsigned int eeaddress) {
   uint8_t rdata = 0xFF;
@@ -120,14 +115,11 @@ int scan_EEPROM(void) {
   return number_data_found;
 }
 
-
-// Wear Leveling Engine (ช่องอื่นทั้งหมดจะเป็น 0xFF เสมอ)
-
+// Wear Leveling (ช่องอื่นทั้งหมดจะเป็น 0xFF เสมอ)
 // สแกนหาช่องเดียวที่ไม่ใช่ 0xFF จากทั้งหมด 100 ช่อง
 uint8_t readModeFromEEPROM_WearLeveling() {
   uint8_t found_mode = 1;
   bool found = false;
-
   for (unsigned int i = 0; i < EEPROM_WL_SIZE; i++) {
     uint8_t val = readEEPROM(i);
     if (val == 1 || val == 2) {
@@ -137,14 +129,12 @@ uint8_t readModeFromEEPROM_WearLeveling() {
       break; // พบตำแหน่งปัจจุบันแล้ว
     }
   }
-
   // หากเป็น EEPROM ใหม่หรือยังไม่มีข้อมูล ให้เขียนค่าเริ่มต้นลงช่อง 0
   if (!found) {
     found_mode = 1;
     current_wl_addr = 0;
     writeEEPROM(0, 1);
   }
-
   Serial.print(F("[EEPROM WL] Active Display Mode: "));
   Serial.print(found_mode);
   Serial.print(F(" at Address: ["));
@@ -157,16 +147,12 @@ uint8_t readModeFromEEPROM_WearLeveling() {
 // บันทึก Mode ใหม่: เขียนช่องถัดไป และลบช่องเดิมให้เป็น 0xFF
 void writeModeToEEPROM_WearLeveling(uint8_t new_mode) {
   unsigned int next_addr = (current_wl_addr + 1) % EEPROM_WL_SIZE;
-
   // 1. เขียนค่าโหมดใหม่ลงช่องถัดไป
   writeEEPROM(next_addr, new_mode);
-
   // 2. เคลียร์ช่องเดิมให้กลับเป็น 0xFF (ทำให้ช่องอื่นๆ ในบล็อกเป็น 0xFF ทั้งหมดเสมอ)
   writeEEPROM(current_wl_addr, 0xFF);
-
   current_wl_addr = next_addr;
   display_mode = new_mode;
-
   Serial.print(F("[EEPROM WL] Moved Mode "));
   Serial.print(new_mode);
   Serial.print(F(" -> Address: ["));
@@ -176,7 +162,6 @@ void writeModeToEEPROM_WearLeveling(uint8_t new_mode) {
 
 
 // Display & Formatting Helpers
-
 void print2digits(int number) {
   if (number >= 0 && number < 10) {
     Serial.print('0');
@@ -264,17 +249,13 @@ void setup() {
   scan_EEPROM(); // แสดงตำแหน่งที่มีข้อมูลใน 24C32 ออกทาง Serial Monitor
 
   // 4. อ่านค่าเวลาเริ่มต้นจาก DS1307
-  if (!RTC.read(tm)) {
-    tm.Hour = 12;
-    tm.Minute = 0;
-    tm.Second = 0;
-    tm.Day = 1;
-    tm.Month = 1;
-    tm.Year = CalendarYrToTm(2026);
-    tm.Wday = 1;
+   if (RTC.read(tm)) {
+    Serial.println("[3] RTC read initial success");
+  } else {
+    Serial.println("[3] RTC read initial failed, using fallback");
+    while(1); // Blocking
   }
   refresh_display();
-  print_serial_time();
 
   // 5. สร้าง FreeRTOS Tasks ด้วย Priority และ Stack ที่เหมาะสม
   xTaskCreate(Task_Clock_Display, "ClockTask", 140, NULL, 2, NULL);

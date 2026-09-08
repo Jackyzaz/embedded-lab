@@ -236,7 +236,6 @@ void Task_Clock_Display(void *pvParameters) {
 // 
 void Task_Keypad(void *pvParameters) {
   (void) pvParameters;
-
   while (1) {
     char key = NO_KEY;
 
@@ -388,8 +387,6 @@ void Task_Keypad(void *pvParameters) {
         }
       }
     }
-
-    // หน่วงเวลาสแกนปุ่ม 60ms เพื่อลดการยิงคำสั่ง I2C Bus รัวเกินไป
-    vTaskDelay(pdMS_TO_TICKS(60));
+    vTaskDelay(pdMS_TO_TICKS(40));
   }
 }
