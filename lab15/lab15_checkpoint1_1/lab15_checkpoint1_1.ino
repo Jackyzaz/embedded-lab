@@ -34,15 +34,14 @@ ISR(INT1_vect) {
 }
 
 void setup() {
-  DDRD = 0b11110000;
-  PORTD = 0b00001100;
-  DDRB = 0b00001111;
-  PORTB = 0b00000000;
+  DDRD = 0b11110011;  // PD2-3 Input PD4-7 Output
+  PORTD = 0b00001100; // Input Pullup Mode
+  DDRB = 0b00001111;  // Output PB0-3 Output
 
   display_led(counter);
 
-  EICRA = 0b00000000; // low level
-  EIMSK = 0b00000011;
+  EICRA = 0b00000000; // low level interrupt
+  EIMSK = 0b00000011; // enable int0 int1
 
   sei();
   Serial.begin(9600);

@@ -20,7 +20,6 @@ const uint8_t CHAR_DASH = 0x40; // ขีดกลาง '-'
 const uint8_t CHAR_BLANK = 0x00; // ปิดดับ
 
 // --- ฟังก์ชันพื้นฐานควบคุม TM1638 ---
-
 void sendCommand(uint8_t value) {
   digitalWrite(strobe, LOW);
   shiftOut(data, clock, LSBFIRST, value);
@@ -120,7 +119,6 @@ void enter_sleep() {
   // 1. ดับหน้าจอและล้างรีจิสเตอร์ของ TM1638 ก่อนเพื่อลดการกินกระแส
   sendCommand(0x80); // Display OFF
   reset();
-
   // 2. ปิดและตั้งค่า sleep mode
   set_sleep_mode(SLEEP_MODE_PWR_DOWN);
   sleep_enable();
@@ -157,18 +155,14 @@ void setup() {
   pinMode(strobe, OUTPUT);
   pinMode(clock, OUTPUT);
   pinMode(data, OUTPUT);
-
   // เริ่มต้นเปิดจอ TM1638 และเคลียร์หน้าจอ
   sendCommand(0x8F); // Display ON, Brightness สูงสุด
   reset();
-
   // แสดงผลเริ่มต้น "dn  12-00"
   display_initial();
-
   // รอการกดสวิตช์ S8 หรือรอจนหมดเวลา 5 วินาที
   unsigned long start_time = millis();
   bool s8_pressed = false;
-
   while (millis() - start_time < 5000) {
     uint8_t buttons = readTM1638_Buttons();
     if (buttons & 0x80) { // สวิตช์ S8 คือบิต 7 (0x80)
@@ -177,16 +171,13 @@ void setup() {
     }
     _delay_ms(20); // ดีเลย์เล็กน้อยเพื่อลดความถี่ในการสแกนปุ่ม
   }
-
   if (s8_pressed) {
     // รอจนปล่อยปุ่ม S8 ป้องกันการสั่งงานซ้ำ
     while (readTM1638_Buttons() & 0x80);
     _delay_ms(20);
-
     // ดำเนินการนับถอยหลัง 12 วินาที
     countdown();
   }
-
   // หากไม่มีการกดปุ่มใน 5 วินาที หรือนับถอยหลังและกระพริบเสร็จแล้ว ให้เข้าสู่ภาวะหลับ
   enter_sleep();
 }

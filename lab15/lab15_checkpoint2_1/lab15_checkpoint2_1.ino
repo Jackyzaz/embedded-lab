@@ -29,11 +29,10 @@ void play_s2() {
 }
 
 void setup() {
-  DDRD = 0b11110000;
-  PORTD = 0b00001100;
-  DDRB = 0b00001111;
-  PORTB = 0b00000000;
-
+  DDRD = 0b11110000;  // PD2-3 Input PD4-7 Output
+  PORTD = 0b00001100; // Input Pullup
+  DDRB = 0b00001111;  // PB0-3 Output
+ 
   display_led(0);
 }
 
